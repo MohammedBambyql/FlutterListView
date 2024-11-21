@@ -43,99 +43,6 @@ class _EmployeeHomePageState extends State<EmployeeHomePage> {
     searchController.addListener(_filterEmployees);
   }
 
-  Future<void> _pickImage(Function(Uint8List?) onImagePicked) async {
-    final completer = Completer<Uint8List>();
-    final input = html.FileUploadInputElement();
-    input.accept = 'image/*';
-    input.click();
-
-    input.onChange.listen((event) {
-      final file = input.files!.first;
-      final reader = html.FileReader();
-      reader.readAsArrayBuffer(file);
-      reader.onLoadEnd.listen((event) {
-        completer.complete(reader.result as Uint8List);
-      });
-    });
-
-    final imageBytes = await completer.future;
-    onImagePicked(imageBytes);
-  }
-
-  Future<void> _showAddEmployeeForm([int? index]) async {
-    Uint8List? imageBytes = index != null ? employees[index].image : null;
-    String name = index != null ? employees[index].name : '';
-    String email = index != null ? employees[index].email : '';
-
-    await showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return StatefulBuilder(
-          builder: (BuildContext context, StateSetter setDialogState) {
-            return AlertDialog(
-              title: Text(index == null ? 'Add Employee' : 'Edit Employee'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (imageBytes != null)
-                    Image.memory(imageBytes!, width: 100, height: 100),
-                  ElevatedButton(
-                    onPressed: () async {
-                      await _pickImage((pickedImage) {
-                        setDialogState(() {
-                          imageBytes = pickedImage;
-                        });
-                      });
-                    },
-                    child: Text('Pick Image'),
-                  ),
-                  TextField(
-                    onChanged: (value) => name = value,
-                    controller: TextEditingController(text: name),
-                    decoration: InputDecoration(labelText: 'Name'),
-                  ),
-                  TextField(
-                    onChanged: (value) => email = value,
-                    controller: TextEditingController(text: email),
-                    decoration: InputDecoration(labelText: 'Email'),
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                  },
-                  child: Text('Cancel'),
-                ),
-                TextButton(
-                  onPressed: () {
-                    if (name.isNotEmpty &&
-                        email.isNotEmpty &&
-                        imageBytes != null) {
-                      setState(() {
-                        if (index == null) {
-                          employees.add(Employee(
-                              image: imageBytes, name: name, email: email));
-                        } else {
-                          employees[index] = Employee(
-                              image: imageBytes, name: name, email: email);
-                        }
-                        _filterEmployees(); // تحديث قائمة البحث
-                      });
-                      Navigator.of(context).pop();
-                    }
-                  },
-                  child: Text(index == null ? 'Add' : 'Update'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
   void _filterEmployees() {
     final query = searchController.text.toLowerCase();
     setState(() {
@@ -151,6 +58,56 @@ class _EmployeeHomePageState extends State<EmployeeHomePage> {
     });
   }
 
+  Future<void> _navigateToFormPage({Employee? employee, int? index}) async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => EmployeeFormPage(
+          employee: employee,
+        ),
+      ),
+    );
+
+    if (result != null && result is Employee) {
+      setState(() {
+        if (index == null) {
+          employees.add(result);
+        } else {
+          employees[index] = result;
+        }
+        _filterEmployees();
+      });
+    }
+  }
+
+  void _confirmDelete(int index) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Confirm Delete'),
+        content: Text('Are you sure you want to delete this employee?'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+            },
+            child: Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              setState(() {
+                employees.removeAt(index);
+                _filterEmployees();
+              });
+              Navigator.pop(context);
+            },
+            child: Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -160,7 +117,7 @@ class _EmployeeHomePageState extends State<EmployeeHomePage> {
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(8.0),
+            padding: EdgeInsets.all(8.0),
             child: Row(
               children: [
                 Expanded(
@@ -174,7 +131,7 @@ class _EmployeeHomePageState extends State<EmployeeHomePage> {
                 ),
                 SizedBox(width: 10),
                 ElevatedButton(
-                  onPressed: () => _showAddEmployeeForm(),
+                  onPressed: () => _navigateToFormPage(),
                   child: Text('Add Employee'),
                 ),
               ],
@@ -185,35 +142,144 @@ class _EmployeeHomePageState extends State<EmployeeHomePage> {
               itemCount: filteredEmployees.length,
               itemBuilder: (context, index) {
                 final employee = filteredEmployees[index];
-                return ListTile(
-                  leading: employee.image != null
-                      ? Image.memory(employee.image!, width: 50, height: 50)
-                      : null,
-                  title: Text(employee.name),
-                  subtitle: Text(employee.email),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: Icon(Icons.edit),
-                        onPressed: () => _showAddEmployeeForm(index),
-                      ),
-                      IconButton(
-                        icon: Icon(Icons.delete),
-                        onPressed: () {
-                          setState(() {
-                            employees.removeAt(index);
-                            _filterEmployees(); // تحديث القائمة بعد الحذف
-                          });
-                        },
-                      ),
-                    ],
+                return Container(
+                  color: index % 2 == 0 ? Colors.grey[200] : Colors.white,
+                  child: ListTile(
+                    leading: employee.image != null
+                        ? Image.memory(employee.image!, width: 50, height: 50)
+                        : null,
+                    title: Text(employee.name),
+                    subtitle: Text(employee.email),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: Icon(Icons.edit),
+                          onPressed: () => _navigateToFormPage(
+                            employee: employee,
+                            index: index,
+                          ),
+                        ),
+                        IconButton(
+                          icon: Icon(Icons.delete),
+                          onPressed: () => _confirmDelete(index),
+                        ),
+                      ],
+                    ),
                   ),
                 );
               },
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class EmployeeFormPage extends StatefulWidget {
+  final Employee? employee;
+
+  EmployeeFormPage({this.employee});
+
+  @override
+  _EmployeeFormPageState createState() => _EmployeeFormPageState();
+}
+
+class _EmployeeFormPageState extends State<EmployeeFormPage> {
+  Uint8List? imageBytes;
+  String name = '';
+  String email = '';
+  final _formKey = GlobalKey<FormState>();
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.employee != null) {
+      imageBytes = widget.employee!.image;
+      name = widget.employee!.name;
+      email = widget.employee!.email;
+    }
+  }
+
+  Future<void> _pickImage() async {
+    final completer = Completer<Uint8List>();
+    final input = html.FileUploadInputElement();
+    input.accept = 'image/*';
+    input.click();
+
+    input.onChange.listen((event) {
+      final file = input.files!.first;
+      final reader = html.FileReader();
+      reader.readAsArrayBuffer(file);
+      reader.onLoadEnd.listen((event) {
+        completer.complete(reader.result as Uint8List);
+      });
+    });
+
+    final imageBytesResult = await completer.future;
+    setState(() {
+      imageBytes = imageBytesResult;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.employee == null ? 'Add Employee' : 'Edit Employee'),
+      ),
+      body: Padding(
+        padding: EdgeInsets.all(16.0),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            children: [
+              if (imageBytes != null)
+                Image.memory(imageBytes!, width: 100, height: 100),
+              ElevatedButton(
+                onPressed: _pickImage,
+                child: Text('Pick Image'),
+              ),
+              TextFormField(
+                initialValue: name,
+                decoration: InputDecoration(labelText: 'Name'),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Name cannot be empty';
+                  }
+                  return null;
+                },
+                onChanged: (value) => name = value,
+              ),
+              TextFormField(
+                initialValue: email,
+                decoration: InputDecoration(labelText: 'Email'),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Email cannot be empty';
+                  }
+                  return null;
+                },
+                onChanged: (value) => email = value,
+              ),
+              SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: () {
+                  if (_formKey.currentState!.validate() && imageBytes != null) {
+                    Navigator.pop(
+                      context,
+                      Employee(image: imageBytes, name: name, email: email),
+                    );
+                  }
+                },
+                child: Text(widget.employee == null ? 'Add' : 'Update'),
+              ),
+              if (imageBytes == null)
+                Text('Image is required', style: TextStyle(color: Colors.red)),
+            ],
+          ),
+        ),
       ),
     );
   }
